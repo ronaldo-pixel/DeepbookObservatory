@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: deepbook-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-deepbook_observatory}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - deepbook-network
+
+  backend:
+    build: ./backend
+    container_name: deepbook-backend
+    environment:
+      - PREDICT_SERVER=${PREDICT_SERVER}
+      - PREDICT_ID=${PREDICT_ID}
+      - PREDICT_PACKAGE=${PREDICT_PACKAGE}
+      - QUOTE_ASSET=${QUOTE_ASSET}
+      - SUI_NETWORK=${SUI_NETWORK}
+      - KEEPER_PRIVATE_KEY=${KEEPER_PRIVATE_KEY}
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - BACKEND_PORT=${BACKEND_PORT:-3001}
+      - NODE_ENV=${NODE_ENV:-development}
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mysql
+    networks:
+      - deepbook-network
+
+volumes:
+  mysql-data:
+
+networks:
+  deepbook-network:
+    driver: bridge
