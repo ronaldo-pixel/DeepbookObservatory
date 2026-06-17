@@ -8,9 +8,10 @@
     "react-dom": "latest",
     "react-scripts": "latest",
     "plotly.js": "latest",
+    "react-plotly.js": "latest",
     "recharts": "latest",
     "axios": "latest",
-    "tailwindcss": "latest"
+    "@mysten/sui": "latest"
   },
   "scripts": {
     "start": "react-scripts start",

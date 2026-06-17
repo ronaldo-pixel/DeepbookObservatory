@@ -4,9 +4,7 @@
  */
 
 const mysql = require('mysql2/promise');
-require('dotenv').config({
-  path: '../.env'
-});
+require('dotenv').config();
 
 // Fix for prepared statement issue with USE command
 const path = require('path');

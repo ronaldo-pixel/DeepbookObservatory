@@ -12,3 +12,7 @@ build/
 *~
 .turbo/
 coverage/
+dataAnalysis.js
+deepbook-predict-design.txt
+deepbook-predict.txt
+deepbook-predict-github-readme.txt
