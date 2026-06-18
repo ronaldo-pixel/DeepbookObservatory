@@ -5,6 +5,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
+
+const graphqlClient = new SuiGraphQLClient({
+  url: 'https://graphql.testnet.sui.io/graphql',
+  network: 'testnet',
+});
 
 const PREDICT_SERVER = process.env.REACT_APP_PREDICT_SERVER || 'https://predict-server.testnet.mystenlabs.com';
 const PREDICT_ID = process.env.REACT_APP_PREDICT_ID || '0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a';
@@ -19,6 +25,9 @@ export function useSurfaceData() {
   const [oracleHistory, setOracleHistory] = useState(new Map()); // Historical price/SVI data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  const historyCache = useRef(new Map());
+
 
  
 
@@ -57,155 +66,149 @@ export function useSurfaceData() {
     fetchOracles();
   }, []);
 
+  const handleOracleActivated = (parsed) => {
+    const { oracle_id, expiry, timestamp } = parsed;
+
+    setOracles((prev) => {
+      const already = prev.find((o) => o.oracle_id === oracle_id);
+      if (already) return prev;
+
+      const newOracle = {
+        oracle_id,
+        activated_at: Number(timestamp),
+        expiry: Number(expiry),
+        settled_at: null,
+      };
+
+      let lo = 0, hi = prev.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (prev[mid].expiry < newOracle.expiry) lo = mid + 1;
+        else hi = mid;
+      }
+
+      const updated = [...prev];
+      updated.splice(lo, 0, newOracle);
+      return updated;
+    });
+  };
+
+  const handleOracleSettled = async (parsed) => {
+    const { oracle_id, timestamp } = parsed;
+
+    const [pricesRes, sviRes] = await Promise.all([
+      axios.get(`${PREDICT_SERVER}/oracles/${oracle_id}/prices`),
+      axios.get(`${PREDICT_SERVER}/oracles/${oracle_id}/svi`),
+    ]);
+
+    const prices = (pricesRes.data || [])
+      .map((p) => ({ spot: p.spot, forward: p.forward, onchain_timestamp: p.onchain_timestamp }))
+      .sort((a, b) => a.onchain_timestamp - b.onchain_timestamp);
+
+    const svi = (sviRes.data || [])
+      .map((s) => ({ a: s.a, b: s.b, rho: s.rho, rho_negative: s.rho_negative, m: s.m, m_negative: s.m_negative, sigma: s.sigma, onchain_timestamp: s.onchain_timestamp }))
+      .sort((a, b) => a.onchain_timestamp - b.onchain_timestamp);
+
+    historyCache.current.set(oracle_id, { oracle_id, prices, svi });
+
+    setOracles((prev) => {
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+      const updated = prev.map((o) =>
+        o.oracle_id === oracle_id ? { ...o, settled_at: Number(timestamp) } : o
+      );
+
+      let start = 0;
+      while (start < updated.length && updated[start].expiry <= sevenDaysAgo) {
+        historyCache.current.delete(updated[start].oracle_id);
+        start++;
+      }
+
+      return start === 0 ? updated : updated.slice(start);
+    });
+  };
+
+
+  const lastCursorRef = useRef(null);
+
+  useEffect(() => {
+    if (!oracles) return;
+
+    const pollEvents = async () => {
+      const [activatedResult, settledResult] = await Promise.all([
+        graphqlClient.query({
+          query: `
+            query PollActivated($after: String) {
+              events(
+                filter: { type: "${PREDICT_PACKAGE}::oracle::OracleActivated" }
+                after: $after
+                first: 50
+              ) {
+                pageInfo { endCursor }
+                nodes { contents { json } }
+              }
+            }
+          `,
+          variables: { after: lastCursorRef.current },
+        }),
+        graphqlClient.query({
+          query: `
+            query PollSettled($after: String) {
+              events(
+                filter: { type: "${PREDICT_PACKAGE}::oracle::OracleSettled" }
+                after: $after
+                first: 50
+              ) {
+                pageInfo { endCursor }
+                nodes { contents { json } }
+              }
+            }
+          `,
+          variables: { after: lastCursorRef.current },
+        }),
+      ]);
+
+      for (const event of activatedResult.data?.events?.nodes || []) {
+        handleOracleActivated(event.contents.json);
+      }
+      for (const event of settledResult.data?.events?.nodes || []) {
+        handleOracleSettled(event.contents.json);
+      }
+
+      const newCursor = activatedResult.data?.events?.pageInfo?.endCursor
+        ?? settledResult.data?.events?.pageInfo?.endCursor;
+      if (newCursor) lastCursorRef.current = newCursor;
+    };
+
+    // Initialize cursor to latest, then start polling
+    const init = async () => {
+        const result = await graphqlClient.query({
+        query: `
+          query InitCursor {
+            events(
+              filter: { type: "${PREDICT_PACKAGE}::oracle::OracleActivated" }
+              last: 1
+            ) {
+              pageInfo { endCursor }
+            }
+          }
+        `,
+      });
+      lastCursorRef.current = result.data?.events?.pageInfo?.endCursor ?? null;
+    };
+
+    init().then(() => {
+      const interval = setInterval(pollEvents, 10 * 60 * 1000);
+      return () => clearInterval(interval);
+    });
+  }, [oracles]);
+
 
   
 
-
-  /*
-  // Step 4: Subscribe to events via WebSocket RPC
-  useEffect(() => {
-    if (!activeOracles || activeOracles.size === 0) return;
-
-    let ws = null;
-    let subscriptionId = null;
-
-    const connectAndSubscribe = () => {
-      try {
-        ws = new WebSocket(SUI_RPC_WS);
-
-        ws.onopen = () => {
-          console.log('Connected to Sui RPC WebSocket');
-
-          // Subscribe to OracleSVIUpdated events
-          const request = {
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'sui_subscribeEvent',
-            params: [
-              {
-                filter: {
-                  MoveEventType: `${PREDICT_PACKAGE}::oracle::OracleSVIUpdated`,
-                },
-              },
-            ],
-          };
-
-          ws.send(JSON.stringify(request));
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-
-            // Handle subscription confirmation
-            if (data.result && !subscriptionId) {
-              subscriptionId = data.result;
-              console.log('Subscription established:', subscriptionId);
-
-              // Also subscribe to price updates
-              const priceRequest = {
-                jsonrpc: '2.0',
-                id: 2,
-                method: 'sui_subscribeEvent',
-                params: [
-                  {
-                    filter: {
-                      MoveEventType: `${PREDICT_PACKAGE}::oracle::OraclePricesUpdated`,
-                    },
-                  },
-                ],
-              };
-              ws.send(JSON.stringify(priceRequest));
-              return;
-            }
-
-            // Handle event notifications
-            if (data.params?.result?.event) {
-              const evt = data.params.result.event;
-              processEvent(evt);
-            }
-          } catch (err) {
-            console.error('Error processing WebSocket message:', err);
-          }
-        };
-
-        ws.onerror = (err) => {
-          console.error('WebSocket error:', err);
-        };
-
-        ws.onclose = () => {
-          console.log('WebSocket closed, reconnecting in 3s...');
-          setTimeout(connectAndSubscribe, 3000);
-        };
-
-        wsRef.current = ws;
-      } catch (err) {
-        console.error('WebSocket connection error:', err);
-        setTimeout(connectAndSubscribe, 3000);
-      }
-    };
-
-    connectAndSubscribe();
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, [activeOracles]);
-
-  // Process single event and update oracle data
-  const processEvent = (event) => {
-    try {
-      const eventType = event.type || '';
-      let oracleId;
-
-      // Parse event based on type
-      if (eventType.includes('OraclePricesUpdated')) {
-        const parsedJson = event.parsedJson || {};
-        oracleId = parsedJson.oracle_id;
-        
-        setActiveOracles((prev) => {
-          const updated = new Map(prev);
-          if (oracleId && updated.has(oracleId)) {
-            const oracle = updated.get(oracleId);
-            oracle.price = {
-              spot: Number(parsedJson.spot || 0),
-              forward: Number(parsedJson.forward || 0),
-              timestamp: Number(parsedJson.timestamp || Date.now()),
-            };
-          }
-          return updated;
-        });
-      } else if (eventType.includes('OracleSVIUpdated')) {
-        const parsedJson = event.parsedJson || {};
-        oracleId = parsedJson.oracle_id;
-
-        setActiveOracles((prev) => {
-          const updated = new Map(prev);
-          if (oracleId && updated.has(oracleId)) {
-            const oracle = updated.get(oracleId);
-            oracle.svi = {
-              a: Number(parsedJson.a || 0),
-              b: Number(parsedJson.b || 0),
-              rho: Number(parsedJson.rho || 0),
-              m: Number(parsedJson.m || 0),
-              sigma: Number(parsedJson.sigma || 0),
-              timestamp: Number(parsedJson.timestamp || Date.now()),
-            };
-          }
-          return updated;
-        });
-      }
-    } catch (err) {
-      console.error('Error processing event:', err);
-    }
-  };
-  */
-
-
   return {
     oracles,
+    historyCache,
     loading,
     error,
   };

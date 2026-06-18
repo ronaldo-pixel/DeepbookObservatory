@@ -117,6 +117,8 @@ export function calculateTimeToExpiry(
 export async function getHistoricalSurface(
   oracles,
   timeSliderValue,
+  historyCache,
+  signal,
   numPoints = 30
 ) {
   const activeOracles =
@@ -131,14 +133,16 @@ export async function getHistoricalSurface(
     return null;
   }
 
-  console.log(activeOracles);
+  // console.log(activeOracles);
 
   const histories =
     await fetchOracleHistories(
-      activeOracles
+      activeOracles,
+      historyCache,
+      signal
     );
   
-  console.log(histories);
+  // console.log(historyCache);
   
   return buildHistoricalSurface(
     activeOracles,
@@ -147,6 +151,54 @@ export async function getHistoricalSurface(
     numPoints
   );
 }
+
+
+export async function getLiveSurface(oracles, numPoints = 30) {
+  const now = Date.now();
+  const activeOracles = getActiveOraclesAtTime(oracles, 0);
+
+  if (activeOracles.length === 0) return null;
+
+  const histories = await Promise.all(
+    activeOracles.map(async (oracle) => {
+      const [pricesRes, sviRes] = await Promise.all([
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices/latest`),
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi/latest`),
+      ]);
+
+      return {
+        oracle_id: oracle.oracle_id,
+        price: pricesRes.data,
+        svi: sviRes.data,
+      };
+    })
+  );
+
+  const ks = generateKGrid(numPoints);
+  const surfaceData = [];
+  const expiryTimes = [];
+
+  for (let i = 0; i < activeOracles.length; i++) {
+    const oracle = activeOracles[i];
+    const history = histories[i];
+
+    const sviSnapshot = history.svi;
+    if (!sviSnapshot) continue;
+
+    const T = calculateTimeToExpiry(oracle.expiry, now);
+    if (T <= 0) continue;
+
+    expiryTimes.push(T * 365.25 * 24);
+    surfaceData.push(
+      ks.map((k) => calculateImpliedVolatility(k, T, sviSnapshot) * 100)
+    );
+  }
+
+  if (surfaceData.length === 0) return null;
+
+  return { ks, expiryTimes, surfaceData };
+}
+
 
 export function getActiveOraclesAtTime(
   oracles,
@@ -199,72 +251,38 @@ export function getActiveOraclesAtTime(
   return activeOracles;
 }
 
-async function fetchOracleHistories(
-  activeOracles
-) {
-  const histories =
-    await Promise.all(
-      activeOracles.map(
-        async (oracle) => {
-          const [
-            pricesRes,
-            sviRes,
-          ] = await Promise.all([
-            axios.get(
-              `${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices`
-            ),
-            axios.get(
-              `${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi`
-            ),
-          ]);
+async function fetchOracleHistories(activeOracles, historyCache, signal) {
+  const histories = await Promise.all(
+    activeOracles.map(async (oracle) => {
+      const cached = historyCache.current.get(oracle.oracle_id);
+      if (cached && oracle.settled_at != null) return cached; // only trust cache if settled
 
-          const prices =
-            (pricesRes.data || [])
-              .map((p) => ({
-                spot: p.spot,
-                forward: p.forward,
-                onchain_timestamp:
-                  p.onchain_timestamp,
-              }))
-              .sort(
-                (a, b) =>
-                  a.onchain_timestamp -
-                  b.onchain_timestamp
-              );
+      const [pricesRes, sviRes] = await Promise.all([
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices`, { signal }),
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi`, { signal }),
+      ]);
 
-          const svi =
-            (sviRes.data || [])
-              .map((s) => ({
-                a: s.a,
-                b: s.b,
-                rho: s.rho,
-                rho_negative:
-                  s.rho_negative,
-                m: s.m,
-                m_negative:
-                  s.m_negative,
-                sigma: s.sigma,
-                onchain_timestamp:
-                  s.onchain_timestamp,
-              }))
-              .sort(
-                (a, b) =>
-                  a.onchain_timestamp -
-                  b.onchain_timestamp
-              );
+      const prices = (pricesRes.data || [])
+        .map((p) => ({ spot: p.spot, forward: p.forward, onchain_timestamp: p.onchain_timestamp }))
+        .sort((a, b) => a.onchain_timestamp - b.onchain_timestamp);
 
-          return {
-            oracle_id:
-              oracle.oracle_id,
-            prices,
-            svi,
-          };
-        }
-      )
-    );
+      const svi = (sviRes.data || [])
+        .map((s) => ({ a: s.a, b: s.b, rho: s.rho, rho_negative: s.rho_negative, m: s.m, m_negative: s.m_negative, sigma: s.sigma, onchain_timestamp: s.onchain_timestamp }))
+        .sort((a, b) => a.onchain_timestamp - b.onchain_timestamp);
+
+      const result = { oracle_id: oracle.oracle_id, prices, svi };
+
+      if (oracle.settled_at != null) {
+        historyCache.current.set(oracle.oracle_id, result); // only cache settled
+      }
+
+      return result;
+    })
+  );
 
   return histories;
 }
+
 
 function buildHistoricalSurface(
   activeOracles,

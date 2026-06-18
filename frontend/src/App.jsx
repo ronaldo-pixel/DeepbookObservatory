@@ -4,11 +4,13 @@
 
 import React from 'react';
 import { useSurfaceData } from './hooks/useSurfaceData';
-import { SurfaceStudio } from './components/SurfaceStudio';
+import { HistorySurface } from './components/HistorySurface';
+import { LiveSurface } from './components/LiveSurface';
 
 function App() {
   const {
     oracles,
+    historyCache,
     loading,
     error,
   } = useSurfaceData();
@@ -52,9 +54,10 @@ function App() {
         {/* Oracle Selector */}
         
         
-          <SurfaceStudio
-            oracles={oracles}
-          />
+          <div className="surfaces-container">
+            <LiveSurface oracles={oracles} />
+            <HistorySurface oracles={oracles} historyCache={historyCache} />
+          </div>
      
       </main>
 
