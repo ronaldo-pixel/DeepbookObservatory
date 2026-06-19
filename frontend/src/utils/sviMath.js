@@ -152,6 +152,49 @@ export async function getHistoricalSurface(
 }
 
 
+/**
+ * Compute oracle health from the last 5 SVI entries (already fetched).
+ * sviHistory is ordered desc — index 0 is most recent.
+ */
+export function computeOracleHealth(oracle, sviHistory) {
+  const now = Date.now();
+
+  if (!sviHistory || sviHistory.length === 0) {
+    return { status: 'UNKNOWN', lag: null, avgInterval: null };
+  }
+
+  const lag = now - sviHistory[0].onchain_timestamp;
+
+  let avgInterval = null;
+  if (sviHistory.length >= 2) {
+    const intervals = [];
+    for (let i = 0; i < sviHistory.length - 1; i++) {
+      intervals.push(sviHistory[i].onchain_timestamp - sviHistory[i + 1].onchain_timestamp);
+    }
+    avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+  }
+
+  const timeToExpiry = oracle.expiry - now;
+  const SLOW_THRESHOLD = Math.max(3 * avgInterval, 60_000)   // at least 1 min
+  const STALE_THRESHOLD = Math.max(5 * avgInterval, 180_000) // at least 3 min
+
+
+  let status;
+  if (avgInterval === null) {
+    status = 'UNKNOWN';
+  } else if (timeToExpiry < 5 * 60 * 1000 && lag > 60_000) {
+    status = 'CRITICAL';
+  } else if (lag > STALE_THRESHOLD) {
+    status = 'STALE';
+  } else if (lag > SLOW_THRESHOLD) {
+    status = 'SLOW';
+  } else {
+    status = 'HEALTHY';
+  }
+
+  return { status, lag, avgInterval, timeToExpiry };
+}
+
 export async function getLiveSurface(oracles, numPoints = 30) {
   const now = Date.now();
   const activeOracles = getActiveOraclesAtTime(oracles, 0);
@@ -161,8 +204,8 @@ export async function getLiveSurface(oracles, numPoints = 30) {
   const histories = await Promise.all(
     activeOracles.map(async (oracle) => {
       const [pricesRes, sviRes] = await Promise.all([
-        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices?limit=1&order=desc`),
-        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi?limit=1&order=desc`),
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices?limit=5&order=desc`),
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi?limit=5&order=desc`),
       ]);
       return {
         oracle_id: oracle.oracle_id,
@@ -176,6 +219,7 @@ export async function getLiveSurface(oracles, numPoints = 30) {
   const surfaceData = [];
   const expiryTimes = [];
   const sviSnapshots = []; // collect for analysis
+  const oracleHealth = [];  // health per oracle
 
   for (let i = 0; i < activeOracles.length; i++) {
     const oracle = activeOracles[i];
@@ -189,6 +233,11 @@ export async function getLiveSurface(oracles, numPoints = 30) {
     expiryTimes.push(T * 365.25 * 24);
     surfaceData.push(ks.map((k) => calculateImpliedVolatility(k, T, sviSnapshot) * 100));
     sviSnapshots.push(sviSnapshot);
+    oracleHealth.push({
+      oracle_id: oracle.oracle_id,
+      expiry: oracle.expiry,
+      ...computeOracleHealth(oracle, history.svi),
+    });
   }
 
   if (surfaceData.length === 0) return null;
@@ -202,6 +251,7 @@ export async function getLiveSurface(oracles, numPoints = 30) {
     ks,
     expiryTimes,
     surfaceData,
+    oracleHealth,
     analysis: { calendarViolations, butterflyViolations, regime },
   };
 }

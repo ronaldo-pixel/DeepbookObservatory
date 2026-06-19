@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
 import { getLiveSurface } from '../utils/sviMath';
 import { SurfaceAnalysis } from './SurfaceAnalysis';
+import { OracleHealthPanel } from './OracleHealthPanel';
 
 export function LiveSurface({ oracles }) {
   const [surface, setSurface] = useState(null);
@@ -77,7 +78,7 @@ export function LiveSurface({ oracles }) {
     return null;
   }
 
-  const { ks,expiryTimes,surfaceData,analysis } = surface;
+  const { ks, expiryTimes, surfaceData, analysis, oracleHealth } = surface;
 
 
   const plotData = [
@@ -256,6 +257,7 @@ export function LiveSurface({ oracles }) {
         />
       </div>
       <SurfaceAnalysis analysis={analysis} />
+      <OracleHealthPanel oracleHealth={oracleHealth} />
     </div>
   );
 }

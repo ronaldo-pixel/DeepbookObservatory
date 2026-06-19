@@ -79,6 +79,7 @@ export function useSurfaceData() {
         expiry: Number(expiry),
         settled_at: null,
       };
+      console.log('New oracle activated:', newOracle);
 
       let lo = 0, hi = prev.length;
       while (lo < hi) {
@@ -100,6 +101,7 @@ export function useSurfaceData() {
       axios.get(`${PREDICT_SERVER}/oracles/${oracle_id}/prices`),
       axios.get(`${PREDICT_SERVER}/oracles/${oracle_id}/svi`),
     ]);
+    console.log(`Oracle ${oracle_id} settled.`);
 
     const prices = (pricesRes.data || [])
       .map((p) => ({ spot: p.spot, forward: p.forward, onchain_timestamp: p.onchain_timestamp }))
@@ -129,12 +131,13 @@ export function useSurfaceData() {
   };
 
 
-  const lastCursorRef = useRef(null);
+  const activatedCursorRef = useRef(null);
+  const settledCursorRef = useRef(null);
 
   useEffect(() => {
-    if (!oracles) return;
-
     const pollEvents = async () => {
+      console.log('polling...');
+
       const [activatedResult, settledResult] = await Promise.all([
         graphqlClient.query({
           query: `
@@ -149,8 +152,9 @@ export function useSurfaceData() {
               }
             }
           `,
-          variables: { after: lastCursorRef.current },
+          variables: { after: activatedCursorRef.current },
         }),
+
         graphqlClient.query({
           query: `
             query PollSettled($after: String) {
@@ -164,44 +168,87 @@ export function useSurfaceData() {
               }
             }
           `,
-          variables: { after: lastCursorRef.current },
+          variables: { after: settledCursorRef.current },
         }),
       ]);
 
       for (const event of activatedResult.data?.events?.nodes || []) {
         handleOracleActivated(event.contents.json);
       }
+
       for (const event of settledResult.data?.events?.nodes || []) {
         handleOracleSettled(event.contents.json);
       }
 
-      const newCursor = activatedResult.data?.events?.pageInfo?.endCursor
-        ?? settledResult.data?.events?.pageInfo?.endCursor;
-      if (newCursor) lastCursorRef.current = newCursor;
+      const activatedCursor =
+        activatedResult.data?.events?.pageInfo?.endCursor;
+
+      const settledCursor =
+        settledResult.data?.events?.pageInfo?.endCursor;
+
+      if (activatedCursor) {
+        activatedCursorRef.current = activatedCursor;
+      }
+
+      if (settledCursor) {
+        settledCursorRef.current = settledCursor;
+      }
+
+      console.log('activated cursor:', activatedCursorRef.current);
+      console.log('settled cursor:', settledCursorRef.current);
     };
 
-    // Initialize cursor to latest, then start polling
     const init = async () => {
-        const result = await graphqlClient.query({
-        query: `
-          query InitCursor {
-            events(
-              filter: { type: "${PREDICT_PACKAGE}::oracle::OracleActivated" }
-              last: 1
-            ) {
-              pageInfo { endCursor }
+      const [activatedInit, settledInit] = await Promise.all([
+        graphqlClient.query({
+          query: `
+            query InitActivatedCursor {
+              events(
+                filter: { type: "${PREDICT_PACKAGE}::oracle::OracleActivated" }
+                last: 1
+              ) {
+                pageInfo { endCursor }
+              }
             }
-          }
-        `,
-      });
-      lastCursorRef.current = result.data?.events?.pageInfo?.endCursor ?? null;
+          `,
+        }),
+
+        graphqlClient.query({
+          query: `
+            query InitSettledCursor {
+              events(
+                filter: { type: "${PREDICT_PACKAGE}::oracle::OracleSettled" }
+                last: 1
+              ) {
+                pageInfo { endCursor }
+              }
+            }
+          `,
+        }),
+      ]);
+
+      activatedCursorRef.current =
+        activatedInit.data?.events?.pageInfo?.endCursor ?? null;
+
+      settledCursorRef.current =
+        settledInit.data?.events?.pageInfo?.endCursor ?? null;
+
+      console.log('initialized activated cursor:', activatedCursorRef.current);
+      console.log('initialized settled cursor:', settledCursorRef.current);
     };
+
+    let interval;
 
     init().then(() => {
-      const interval = setInterval(pollEvents, 10 * 60 * 1000);
-      return () => clearInterval(interval);
+      interval = setInterval(pollEvents, 10 * 60 * 1000);
     });
-  }, [oracles]);
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, []);
 
 
   

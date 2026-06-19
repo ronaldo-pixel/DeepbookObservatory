@@ -26,60 +26,6 @@ async function initDb() {
   return pool;
 }
 
-/**
- * Save SVI snapshot to database
- */
-async function saveSVISnapshot(oracleId, timestamp, spot, forward, sviParams) {
-  const query = `
-    INSERT INTO svi_snapshots 
-    (oracle_id, timestamp, spot, forward, svi_a, svi_b, svi_rho, svi_m, svi_sigma)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-
-  const [result] = await pool.execute(query, [
-    oracleId,
-    timestamp,
-    spot,
-    forward,
-    sviParams.a,
-    sviParams.b,
-    sviParams.rho,
-    sviParams.m,
-    sviParams.sigma,
-  ]);
-
-  return result;
-}
-
-/**
- * Get SVI snapshots for last N hours
- */
-async function getSVIHistory(oracleId, hours = 4) {
-  const query = `
-    SELECT * FROM svi_snapshots 
-    WHERE oracle_id = ? 
-    AND created_at >= DATE_SUB(NOW(), INTERVAL ? HOUR)
-    ORDER BY timestamp ASC
-  `;
-
-  const [rows] = await pool.execute(query, [oracleId, hours]);
-  return rows;
-}
-
-/**
- * Get latest SVI snapshot for oracle
- */
-async function getLatestSVISnapshot(oracleId) {
-  const query = `
-    SELECT * FROM svi_snapshots 
-    WHERE oracle_id = ? 
-    ORDER BY timestamp DESC 
-    LIMIT 1
-  `;
-
-  const [rows] = await pool.execute(query, [oracleId]);
-  return rows[0] || null;
-}
 
 /**
  * Save keeper redemption log
@@ -128,27 +74,11 @@ async function isPositionRedeemed(positionId) {
   return rows.length > 0;
 }
 
-/**
- * Get all SVI snapshots since timestamp (for regime calculation)
- */
-async function getSVISnapshotsSince(timestamp) {
-  const query = `
-    SELECT * FROM svi_snapshots 
-    WHERE timestamp >= ? 
-    ORDER BY oracle_id, timestamp ASC
-  `;
 
-  const [rows] = await pool.execute(query, [timestamp]);
-  return rows;
-}
 
 module.exports = {
   initDb,
-  saveSVISnapshot,
-  getSVIHistory,
-  getLatestSVISnapshot,
   saveKeeperLog,
   getKeeperLogs,
   isPositionRedeemed,
-  getSVISnapshotsSince,
 };

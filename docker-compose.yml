@@ -13,6 +13,11 @@ services:
       - mysql-data:/var/lib/mysql
     networks:
       - deepbook-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
@@ -30,11 +35,30 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
       - BACKEND_PORT=${BACKEND_PORT:-3001}
-      - NODE_ENV=${NODE_ENV:-development}
+      - NODE_ENV=${NODE_ENV:-production}
     ports:
       - "3001:3001"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+    networks:
+      - deepbook-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: deepbook-frontend
+    environment:
+      # These are baked into the React build at build-time via ARG / ENV.
+      # Override them here if you need to point at a different network.
+      - REACT_APP_PREDICT_SERVER=${REACT_APP_PREDICT_SERVER:-https://predict-server.testnet.mystenlabs.com}
+      - REACT_APP_PREDICT_ID=${REACT_APP_PREDICT_ID:-0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a}
+      - REACT_APP_PREDICT_PACKAGE=${REACT_APP_PREDICT_PACKAGE:-0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138}
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
     networks:
       - deepbook-network
 
