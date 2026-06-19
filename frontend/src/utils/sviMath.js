@@ -4,7 +4,6 @@ import axios from "axios";
  * SVI (Stochastic Volatility Inspired) Math Utilities
  */
 
-const PRICE_SCALE = 1e9;
 const SVI_SCALE = 1e9;
 const PREDICT_SERVER = process.env.REACT_APP_PREDICT_SERVER || 'https://predict-server.testnet.mystenlabs.com';
 
@@ -162,14 +161,13 @@ export async function getLiveSurface(oracles, numPoints = 30) {
   const histories = await Promise.all(
     activeOracles.map(async (oracle) => {
       const [pricesRes, sviRes] = await Promise.all([
-        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices/latest`),
-        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi/latest`),
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices?limit=1&order=desc`),
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi?limit=1&order=desc`),
       ]);
-
       return {
         oracle_id: oracle.oracle_id,
-        price: pricesRes.data,
-        svi: sviRes.data,
+        prices: pricesRes.data || [],
+        svi: sviRes.data || [],
       };
     })
   );
@@ -177,26 +175,35 @@ export async function getLiveSurface(oracles, numPoints = 30) {
   const ks = generateKGrid(numPoints);
   const surfaceData = [];
   const expiryTimes = [];
+  const sviSnapshots = []; // collect for analysis
 
   for (let i = 0; i < activeOracles.length; i++) {
     const oracle = activeOracles[i];
     const history = histories[i];
-
-    const sviSnapshot = history.svi;
+    const sviSnapshot = history.svi[0];
     if (!sviSnapshot) continue;
 
     const T = calculateTimeToExpiry(oracle.expiry, now);
     if (T <= 0) continue;
 
     expiryTimes.push(T * 365.25 * 24);
-    surfaceData.push(
-      ks.map((k) => calculateImpliedVolatility(k, T, sviSnapshot) * 100)
-    );
+    surfaceData.push(ks.map((k) => calculateImpliedVolatility(k, T, sviSnapshot) * 100));
+    sviSnapshots.push(sviSnapshot);
   }
 
   if (surfaceData.length === 0) return null;
 
-  return { ks, expiryTimes, surfaceData };
+  // Run analysis
+  const calendarViolations = checkCalendarViolations(activeOracles, sviSnapshots);
+  const butterflyViolations = checkButterflyViolations(activeOracles, sviSnapshots);
+  const regime = detectRegime(activeOracles, sviSnapshots);
+
+  return {
+    ks,
+    expiryTimes,
+    surfaceData,
+    analysis: { calendarViolations, butterflyViolations, regime },
+  };
 }
 
 
@@ -443,4 +450,144 @@ function findLatestBefore(
   }
 
   return result;
+}
+
+
+/**
+ * Calendar Spread Violation Check
+ * Total variance w(k) must increase with expiry for same k.
+ * If w(k, T1) > w(k, T2) for T1 < T2, that's a violation.
+ * activeOracles must be sorted by expiry (they already are).
+ */
+export function checkCalendarViolations(activeOracles, sviSnapshots) {
+  const violations = [];
+
+  const ks = generateKGrid(30);
+
+  for (let i = 0; i < activeOracles.length - 1; i++) {
+    const svi1 = sviSnapshots[i];
+    const svi2 = sviSnapshots[i + 1];
+
+    if (!svi1 || !svi2) continue;
+
+    for (const k of ks) {
+      const w1 = calculateTotalVariance(k, svi1);
+      const w2 = calculateTotalVariance(k, svi2);
+
+      if (w1 > w2) {
+        violations.push({
+          k: k.toFixed(3),
+          expiry1: activeOracles[i].expiry,
+          expiry2: activeOracles[i + 1].expiry,
+        });
+        break; // one violation per expiry pair is enough
+      }
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Butterfly Violation Check
+ * Local vol must be non-negative everywhere.
+ * Condition: 1 - (k*g'(k))/(2*g(k)) - (g'(k)^2)/(4*(1/4 + 1/g(k))) >= 0
+ * where g(k) = w(k) / T
+ * Simplified: check d²w/dk² >= 0 and density condition at each k.
+ */
+export function checkButterflyViolations(activeOracles, sviSnapshots) {
+  const violations = [];
+  const ks = generateKGrid(60); // finer grid for butterfly
+  const dk = ks[1] - ks[0];
+
+  for (let i = 0; i < activeOracles.length; i++) {
+    const svi = sviSnapshots[i];
+    const oracle = activeOracles[i];
+    if (!svi) continue;
+
+    const T = calculateTimeToExpiry(oracle.expiry);
+    if (T <= 0) continue;
+
+    let hasViolation = false;
+
+    for (let j = 1; j < ks.length - 1; j++) {
+      const k = ks[j];
+      const w = calculateTotalVariance(k, svi);
+      const wPlus = calculateTotalVariance(k + dk, svi);
+      const wMinus = calculateTotalVariance(k - dk, svi);
+
+      // Second derivative of w
+      const d2w = (wPlus - 2 * w + wMinus) / (dk * dk);
+      // First derivative of w
+      const dw = (wPlus - wMinus) / (2 * dk);
+
+      if (w <= 0) continue;
+
+      // Dupire density condition
+      const g = (1 - (k * dw) / (2 * w)) ** 2 - (dw ** 2) / 4 * (1 / w + 0.25) + d2w / 2;
+
+      if (g < 0) {
+        hasViolation = true;
+        break;
+      }
+    }
+
+    if (hasViolation) {
+      violations.push({ expiry: oracle.expiry });
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Regime Detection
+ * Based on ATM IV level and term structure slope.
+ *
+ * ATM IV = IV at k=0 for nearest expiry
+ * Slope  = IV difference between shortest and longest expiry at k=0
+ *
+ * Regimes:
+ *   normal      — ATM IV < 80%, flat/upward slope
+ *   elevated    — ATM IV 80–150%, any slope
+ *   extreme     — ATM IV > 150%
+ *   inverted    — downward sloping term structure (front > back)
+ */
+export function detectRegime(activeOracles, sviSnapshots) {
+  if (!activeOracles.length || !sviSnapshots.length) return null;
+
+  const frontSvi = sviSnapshots[0];
+  const backSvi = sviSnapshots[sviSnapshots.length - 1];
+  const frontOracle = activeOracles[0];
+  const backOracle = activeOracles[activeOracles.length - 1];
+
+  if (!frontSvi || !backSvi) return null;
+
+  const frontT = calculateTimeToExpiry(frontOracle.expiry);
+  const backT = calculateTimeToExpiry(backOracle.expiry);
+
+  if (frontT <= 0 || backT <= 0) return null;
+
+  const frontATMIV = calculateImpliedVolatility(0, frontT, frontSvi) * 100;
+  const backATMIV = calculateImpliedVolatility(0, backT, backSvi) * 100;
+
+  const slope = backATMIV - frontATMIV; // positive = normal, negative = inverted
+
+  let regime;
+  if (frontATMIV > 150) {
+    regime = 'extreme';
+  } else if (slope < -10) {
+    regime = 'inverted';
+  } else if (frontATMIV > 80) {
+    regime = 'elevated';
+  } else {
+    regime = 'normal';
+  }
+
+  return {
+    regime,
+    frontATMIV: frontATMIV.toFixed(1),
+    backATMIV: backATMIV.toFixed(1),
+    slope: slope.toFixed(1),
+  };
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
 import { getLiveSurface } from '../utils/sviMath';
+import { SurfaceAnalysis } from './SurfaceAnalysis';
 
 export function LiveSurface({ oracles }) {
   const [surface, setSurface] = useState(null);
@@ -45,10 +46,10 @@ export function LiveSurface({ oracles }) {
     // Initial load
     fetchSurface(true);
 
-    // Refresh every 5 seconds
+    // Refresh every 20 seconds
     const interval = setInterval(() => {
       fetchSurface(false);
-    }, 10000);
+    }, 20000);
 
     return () => {
       cancelled = true;
@@ -76,7 +77,8 @@ export function LiveSurface({ oracles }) {
     return null;
   }
 
-  const { ks, expiryTimes, surfaceData } = surface;
+  const { ks,expiryTimes,surfaceData,analysis } = surface;
+
 
   const plotData = [
     {
@@ -253,6 +255,7 @@ export function LiveSurface({ oracles }) {
           }}
         />
       </div>
+      <SurfaceAnalysis analysis={analysis} />
     </div>
   );
 }
