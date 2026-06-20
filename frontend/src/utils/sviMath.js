@@ -237,7 +237,9 @@ export async function getLiveSurface(oracles, numPoints = 30) {
       oracle_id: oracle.oracle_id,
       expiry: oracle.expiry,
       sviParams: sviSnapshot,
-      latestPrice: history.prices[0],
+      prevSviParams: history.svi[1] || null,
+      latestPrice: history.prices[0] || null,
+      prevPrice: history.prices[1] || null,
       ...computeOracleHealth(oracle, history.svi),
     });
   }

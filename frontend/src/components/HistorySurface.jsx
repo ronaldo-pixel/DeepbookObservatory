@@ -9,6 +9,7 @@ export function HistorySurface({ oracles, historyCache }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [manualInput, setManualInput] = useState('60');
 
   function formatRelativeTime(minutes) {
     if (minutes === 0) return 'current snapshot';
@@ -47,6 +48,8 @@ export function HistorySurface({ oracles, historyCache }) {
           controller.signal
         );
 
+        
+
         if (!controller.signal.aborted) {
           if (surface) {
             setSurfaceToDisplay(surface);
@@ -65,7 +68,7 @@ export function HistorySurface({ oracles, historyCache }) {
 
     loadSurface();
     return () => controller.abort();
-  }, [oracles, debouncedValue]);
+  }, [debouncedValue]);
 
   if (loading && !surfaceToDisplay) {
     return (
@@ -84,6 +87,7 @@ export function HistorySurface({ oracles, historyCache }) {
   if (!surfaceToDisplay) return null;
 
   const { ks, expiryTimes, surfaceData } = surfaceToDisplay;
+  
 
   const plotData = [
     {
@@ -176,6 +180,31 @@ export function HistorySurface({ oracles, historyCache }) {
         />
       </div>
 
+      <div className="manual-time-controls">
+        <input
+          type="text"
+          value={manualInput}
+          onChange={(e) => setManualInput(e.target.value)}
+          placeholder="e.g. 60, 400"
+          className="manual-time-input"
+        />
+
+        <button
+          className="manual-time-btn"
+          onClick={() => {
+            const value = parseInt(manualInput, 10);
+
+            if (!Number.isNaN(value)) {
+              setTimeSliderValue(
+                Math.min(10080, Math.max(0, value))
+              );
+            }
+          }}
+        >
+          Go
+        </button>
+      </div>
+
       <div className="time-slider-container">
         <div className="slider-header">
           <label>Surface Timeline</label>
@@ -193,6 +222,7 @@ export function HistorySurface({ oracles, historyCache }) {
           <span>current</span>
           <span>7d Ago</span>
         </div>
+        
       </div>
     </div>
   );

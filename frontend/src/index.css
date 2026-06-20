@@ -14,7 +14,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(to bottom right, #0f172a, #1e293b, #0f172a);
+  background: #0f172a;
   color: #fff;
 }
 
@@ -52,7 +52,7 @@ body {
 
 .app-header {
   border-bottom: 1px solid #374151;
-  background: rgba(17, 24, 39, 0.5);
+  background: #0f172a;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -60,12 +60,54 @@ body {
 }
 
 .header-content {
-  max-width: 1280px;
+  width: 80%;
   margin: 0 auto;
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.25rem;
+}
+
+.nav-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #9ca3af;
+  padding: 0.5rem 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.nav-tab-btn:hover {
+  color: #fff;
+  border-bottom-color: #4b5563;
+}
+
+.nav-tab-btn.active {
+  color: #fff;
+  border-bottom-color: #3b82f6;
+  font-weight: 700;
 }
 
 .header-title h1 {
@@ -129,6 +171,7 @@ body {
 /* Main Content */
 .main-content {
   width: 80%;
+  background: #0f172a;
   margin: 2rem auto;
   padding: 0;
   flex: 1;
@@ -194,6 +237,7 @@ body {
 .plot-container {
   background: #0f1419;
   border-radius: 0.375rem;
+  min-height: 600px;
   overflow: hidden;
   border: 1px solid #374151;
 }
@@ -318,6 +362,7 @@ body {
 /* Footer */
 .app-footer {
   border-top: 1px solid #374151;
+  background: #020617;
   margin-top: 3rem;
   padding: 1.5rem;
   text-align: center;
@@ -327,6 +372,10 @@ body {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .surface-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
   .header-content {
     flex-direction: column;
     gap: 1rem;
@@ -396,12 +445,6 @@ body {
   50% { opacity: 0.4; }
 }
 
-
-.surfaces-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
 
 .historical-badge {
   color: #facc15;
@@ -555,4 +598,220 @@ body {
   color: #fff;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
+}
+
+/* ── Alerts Indicator ────────────────────────────────── */
+.alerts-container {
+  position: relative;
+}
+
+.alerts-bell-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  padding: 8px;
+  color: #9ca3af;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.alerts-bell-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.alerts-bell-btn.has-alerts {
+  color: #facc15;
+  animation: wobble 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes wobble {
+  0% { transform: rotate(-8deg); }
+  100% { transform: rotate(8deg); }
+}
+
+.alerts-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 5px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  border: 1.5px solid #111827;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.alerts-dropdown {
+  position: absolute;
+  top: 45px;
+  right: 0;
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid #374151;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+  width: 340px;
+  z-index: 100;
+  padding: 14px;
+}
+
+.alerts-dropdown h4 {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: #fff;
+  border-bottom: 1px solid #374151;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.alert-item {
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alert-item.normal {
+  background: rgba(16, 185, 129, 0.08);
+  border-left: 3px solid #10b981;
+  color: #a7f3d0;
+}
+
+.alert-item.warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 3px solid #f59e0b;
+  color: #fef3c7;
+}
+
+.alert-item.critical {
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 3px solid #ef4444;
+  color: #fee2e2;
+}
+
+.alert-severity-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.alert-message {
+  color: #fff;
+  font-weight: 500;
+}
+
+.alert-item.clickable {
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+.alert-item.clickable:hover {
+  filter: brightness(1.25);
+  transform: translateX(2px);
+}
+
+.alert-navigate-hint {
+  font-size: 0.72rem;
+  color: #93c5fd;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+/* Surface Dashboard Layout */
+.surface-dashboard-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.surface-panel {
+  min-width: 0;
+}
+
+/* Manual Timeline Input */
+
+.manual-time-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.manual-time-input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 6px;
+
+  color: #fff;
+  font-size: 14px;
+
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.manual-time-input::placeholder {
+  color: #6b7280;
+}
+
+.manual-time-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.manual-time-btn {
+  height: 38px;
+  padding: 0 16px;
+
+  border: none;
+  border-radius: 6px;
+
+  background: #2563eb;
+  color: white;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.manual-time-btn:hover {
+  background: #1d4ed8;
+}
+
+.manual-time-btn:active {
+  transform: translateY(1px);
+}
+
+.manual-time-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
