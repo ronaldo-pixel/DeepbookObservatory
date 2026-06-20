@@ -1,65 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Plot from 'react-plotly.js';
-import { getLiveSurface } from '../utils/sviMath';
-import { SurfaceAnalysis } from './SurfaceAnalysis';
-import { OracleHealthPanel } from './OracleHealthPanel';
 
-export function LiveSurface({ oracles }) {
-  const [surface, setSurface] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [revision, setRevision] = useState(0);
-
-  useEffect(() => {
-    if (!oracles || oracles.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchSurface = async (initial = false) => {
-      try {
-        if (!initial) {
-          setRefreshing(true);
-        }
-
-        const result = await getLiveSurface(oracles);
-
-        if (
-          !cancelled &&
-          result
-        ) {
-          setSurface(result);
-
-          // Tell Plotly to update data without remounting
-          setRevision(prev => prev + 1);
-        }
-      } catch (err) {
-        console.error('Live surface error:', err);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          setRefreshing(false);
-        }
-      }
-    };
-
-    // Initial load
-    fetchSurface(true);
-
-    // Refresh every 20 seconds
-    const interval = setInterval(() => {
-      fetchSurface(false);
-    }, 20000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [oracles]);
-
+export function LiveSurface({ liveSurface, loading, refreshing, revision }) {
   // Only show loading screen before first successful load
-  if (loading && !surface) {
+  if (loading && !liveSurface) {
     return (
       <div className="surface-studio">
         <div className="surface-header">
@@ -74,27 +18,21 @@ export function LiveSurface({ oracles }) {
     );
   }
 
-  if (!surface) {
+  if (!liveSurface) {
     return null;
   }
 
-  const { ks, expiryTimes, surfaceData, analysis, oracleHealth } = surface;
-
+  const { ks, expiryTimes, surfaceData } = liveSurface;
 
   const plotData = [
     {
       x: ks,
       y: expiryTimes,
       z: surfaceData,
-
       type: 'surface',
-
       colorscale: 'RdYlGn-r',
-
       name: 'Implied Volatility %',
-
       showscale: true,
-
       colorbar: {
         title: {
           text: 'IV %',
@@ -113,15 +51,11 @@ export function LiveSurface({ oracles }) {
         color: '#fff',
       },
     },
-
     // Preserve zoom/camera between updates
     uirevision: 'surface',
-
     scene: {
       bgcolor: 'rgba(30,30,40,1)',
-
       aspectmode: 'cube',
-
       xaxis: {
         title: {
           text: 'Log-Moneyness k = ln(K/F)',
@@ -130,16 +64,13 @@ export function LiveSurface({ oracles }) {
           },
           standoff: 10,
         },
-
         tickfont: {
           color: '#fff',
         },
-
         backgroundcolor: 'rgba(20,20,30,0.9)',
         gridcolor: '#444',
         zerolinecolor: '#666',
       },
-
       yaxis: {
         title: {
           text: 'Time to Expiry (hours)',
@@ -148,16 +79,13 @@ export function LiveSurface({ oracles }) {
           },
           standoff: 10,
         },
-
         tickfont: {
           color: '#fff',
         },
-
         backgroundcolor: 'rgba(20,20,30,0.9)',
         gridcolor: '#444',
         zerolinecolor: '#666',
       },
-
       zaxis: {
         title: {
           text: 'Implied Volatility %',
@@ -166,16 +94,13 @@ export function LiveSurface({ oracles }) {
           },
           standoff: 10,
         },
-
         tickfont: {
           color: '#fff',
         },
-
         backgroundcolor: 'rgba(20,20,30,0.9)',
         gridcolor: '#444',
         zerolinecolor: '#666',
       },
-
       camera: {
         eye: {
           x: 1.5,
@@ -184,23 +109,18 @@ export function LiveSurface({ oracles }) {
         },
       },
     },
-
     paper_bgcolor: 'rgba(30,30,40,1)',
     plot_bgcolor: 'rgba(30,30,40,1)',
-
     font: {
       color: '#fff',
     },
-
     height: 600,
-
     margin: {
       l: 50,
       r: 50,
       b: 50,
       t: 50,
     },
-
     hovermode: 'closest',
   };
 
@@ -240,7 +160,6 @@ export function LiveSurface({ oracles }) {
             responsive: true,
             displayModeBar: true,
             displaylogo: false,
-
             toImageButtonOptions: {
               format: 'png',
               filename: 'live_volatility_surface',
@@ -256,8 +175,6 @@ export function LiveSurface({ oracles }) {
           }}
         />
       </div>
-      <SurfaceAnalysis analysis={analysis} />
-      <OracleHealthPanel oracleHealth={oracleHealth} />
     </div>
   );
 }

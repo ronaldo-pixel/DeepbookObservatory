@@ -11,21 +11,6 @@ const path = require('path');
 const fs = require('fs');
 
 const SQL_SCHEMA = `
-CREATE TABLE IF NOT EXISTS svi_snapshots (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  oracle_id VARCHAR(100) NOT NULL,
-  timestamp BIGINT NOT NULL,
-  spot DECIMAL(20,6),
-  forward DECIMAL(20,6),
-  svi_a DECIMAL(20,10),
-  svi_b DECIMAL(20,10),
-  svi_rho DECIMAL(20,10),
-  svi_m DECIMAL(20,10),
-  svi_sigma DECIMAL(20,10),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_oracle_time (oracle_id, timestamp)
-);
-
 CREATE TABLE IF NOT EXISTS keeper_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   position_id VARCHAR(100) NOT NULL,

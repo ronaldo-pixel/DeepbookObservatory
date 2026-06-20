@@ -236,6 +236,8 @@ export async function getLiveSurface(oracles, numPoints = 30) {
     oracleHealth.push({
       oracle_id: oracle.oracle_id,
       expiry: oracle.expiry,
+      sviParams: sviSnapshot,
+      latestPrice: history.prices[0],
       ...computeOracleHealth(oracle, history.svi),
     });
   }

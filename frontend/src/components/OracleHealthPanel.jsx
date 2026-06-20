@@ -45,21 +45,34 @@ function formatExpiry(ts) {
   });
 }
 
-export function OracleHealthPanel({ oracleHealth }) {
+export function OracleHealthPanel({ oracleHealth, selectedOracleId, onSelectOracle }) {
   if (!oracleHealth || oracleHealth.length === 0) return null;
 
   return (
     <div className="oracle-health-panel">
       <div className="oracle-health-header">
         <span className="oracle-health-title">Oracle Feed Health</span>
-        <span className="oracle-health-subtitle">SVI update latency · {oracleHealth.length} active</span>
+        <span className="oracle-health-subtitle">SVI update latency · {oracleHealth.length} active · Click a card to select</span>
       </div>
 
       <div className="oracle-health-grid">
         {oracleHealth.map((oracle) => {
           const cfg = STATUS_CONFIG[oracle.status] ?? STATUS_CONFIG.UNKNOWN;
+          const isSelected = oracle.oracle_id === selectedOracleId;
+
           return (
-            <div key={oracle.oracle_id} className="oracle-health-card">
+            <div 
+              key={oracle.oracle_id} 
+              className={`oracle-health-card ${isSelected ? 'selected' : ''}`}
+              onClick={() => onSelectOracle && onSelectOracle(oracle.oracle_id)}
+              style={{
+                cursor: 'pointer',
+                borderColor: isSelected ? '#3b82f6' : '#2a3347',
+                boxShadow: isSelected ? '0 0 10px rgba(59, 130, 246, 0.4)' : 'none',
+                background: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                transition: 'all 0.2s ease',
+              }}
+            >
               <div className="oracle-health-card-top">
                 <span className="oracle-expiry">{formatExpiry(oracle.expiry)}</span>
                 <span className="oracle-status-badge" style={{ color: cfg.color }}>

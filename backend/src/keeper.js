@@ -212,3 +212,175 @@ main().catch(err => {
   console.error('Fatal keeper error:', err);
   process.exit(1);
 });
+
+
+
+
+
+
+/*
+Mostly yes. This addresses the **"don't miss events while running"** concern, but not the **"what if the keeper was down"** concern by itself.
+
+Your code does this:
+
+```text
+init()
+  ↓
+Get latest cursor
+  ↓
+Store latest cursor
+  ↓
+Poll every 10 minutes
+```
+
+The important part is:
+
+```js
+events(... last: 1)
+```
+
+and then:
+
+```js
+activatedCursorRef.current =
+  activatedInit.data?.events?.pageInfo?.endCursor;
+
+settledCursorRef.current =
+  settledInit.data?.events?.pageInfo?.endCursor;
+```
+
+That means when the keeper starts, you're intentionally saying:
+
+> "Ignore all historical events. Start listening from now."
+
+---
+
+### Example
+
+Suppose:
+
+```text
+09:00 Keeper down
+
+09:15 Oracle A settled
+09:30 Oracle B settled
+
+10:00 Keeper starts
+```
+
+Your init does:
+
+```text
+last: 1
+↓
+cursor = newest event
+```
+
+Now Oracle A and B are permanently skipped.
+
+---
+
+### Therefore you still need startup reconciliation
+
+When the keeper starts:
+
+```text
+1. Fetch settled oracles
+2. Process any not already completed
+3. Initialize event cursor
+4. Start polling events
+```
+
+Then you're safe.
+
+---
+
+### Even better
+
+Since your keeper only cares about redemption, I'd actually subscribe only to:
+
+```move
+OracleSettled
+```
+
+You probably don't need:
+
+```move
+OracleActivated
+OraclePricesUpdated
+OracleSVIUpdated
+```
+
+at all.
+
+Your runtime flow becomes:
+
+```text
+OracleSettled
+    ↓
+getUnredeemedPositions(oracleId)
+    ↓
+redeem
+```
+
+Very simple.
+
+---
+
+### One thing I like about your cursor approach
+
+Because you're using:
+
+```js
+after: settledCursorRef.current
+```
+
+you're not rescanning old events every poll.
+
+So while the keeper is running:
+
+```text
+Poll #1 → events 100-120
+Poll #2 → events 121-135
+Poll #3 → events 136-140
+```
+
+That's exactly what you want.
+
+---
+
+### My recommended architecture
+
+```text
+KEEPER START
+============
+
+load completed_oracles
+
+fetch settled oracles
+    ↓
+process uncompleted ones
+
+initialize settled cursor
+    ↓
+start polling OracleSettled events
+
+
+RUNTIME
+========
+
+OracleSettled event
+    ↓
+redeem positions
+    ↓
+mark oracle completed
+
+
+RESTART
+========
+
+same startup reconciliation again
+```
+
+With that architecture you'll never need to scan all 2500 oracles every minute, and you won't lose settlements that happened while the keeper was offline.
+*/

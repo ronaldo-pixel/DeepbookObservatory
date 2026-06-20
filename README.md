@@ -9,14 +9,15 @@ A real-time volatility surface analytics platform for [DeepBook Predict](https:/
 ```
 frontend/
 ├── src/
-│   ├── App.jsx                     # Root component — header, status, layout
+│   ├── App.jsx                     # Root component — handles live state polling (20s interval), layout, & selected oracle
 │   ├── index.js                    # React entrypoint
 │   ├── index.css                   # Global dark-theme styles
 │   ├── components/
-│   │   ├── LiveSurface.jsx         # 3D IV surface (20s auto-refresh)
-│   │   ├── HistorySurface.jsx      # Historical 3D surface with time slider (up to 7d ago)
-│   │   ├── SurfaceAnalysis.jsx     # Regime badge + calendar & butterfly violation cards
-│   │   └── OracleHealthPanel.jsx   # Per-oracle SVI feed health (lag, avg interval, expiry)
+│   │   ├── LiveSurface.jsx         # Renders the 3D live implied volatility surface
+│   │   ├── HistorySurface.jsx      # Renders the 3D historical surface with a timeline slider (up to 7d ago)
+│   │   ├── SurfaceAnalysis.jsx     # Market Volatility Regime and Calendar & Butterfly violation checks (always visible)
+│   │   ├── OracleSmileViewer.jsx   # 2D volatility smile curve (IV vs. log-moneyness) + SVI parameters + spot/forward prices
+│   │   └── OracleHealthPanel.jsx   # Per-oracle SVI feed health (lag, avg interval, expiry); allows selection by card click
 │   ├── hooks/
 │   │   └── useSurfaceData.js       # Fetches oracle list; polls Sui GraphQL for OracleActivated / OracleSettled events
 │   └── utils/
@@ -31,12 +32,12 @@ frontend/
 
 | Feature | Details |
 |---|---|
-| **Live Volatility Surface** | Interactive 3D Plotly surface, refreshes every 20 s. Axes: log-moneyness `k = ln(K/F)`, time to expiry (hours), implied volatility (%). |
-| **Historical Replay** | Scrub up to 7 days back with a time slider. Debounced 300 ms. Uses in-memory cache for settled oracles. |
-| **Surface Analysis** | Calendar arbitrage detection (total variance must be monotone in expiry), butterfly arbitrage detection (Dupire local-vol density ≥ 0). |
-| **Volatility Regime** | Auto-classified: `Normal` / `Elevated` / `Extreme` / `Inverted`. Based on front-ATM IV and term structure slope. |
-| **Oracle Health Panel** | Per-oracle cards showing update lag, average SVI interval, and time to expiry. Status: `HEALTHY` / `SLOW` / `STALE` / `CRITICAL` / `UNKNOWN`. |
-| **Sui Event Streaming** | Polls `OracleActivated` and `OracleSettled` events via Sui GraphQL every 10 minutes to keep the oracle list current. |
+| **Live Volatility Surface** | Interactive 3D Plotly surface. Axes: log-moneyness `k = ln(K/F)`, time to expiry (hours), implied volatility (%). |
+| **Historical Replay** | Scrub up to 7 days back with a time slider (debounced 300 ms). Uses in-memory cache for settled oracles. |
+| **Oracle Smile & Parameter Details** | Renders 2D volatility smile curves for selected active oracles. Displays normalized SVI params (`a`, `b`, `rho`, `m`, `sigma`), spot price, and forward price. |
+| **Surface Analysis** | Always-visible metrics block displaying Volatility Regime (`Normal` / `Elevated` / `Extreme` / `Inverted`), Calendar spread arbitrage checking, and Butterfly spread arbitrage checking (Dupire density ≥ 0). |
+| **Oracle Health Panel** | Per-oracle feed health indicators showing lag, average update interval, and time to expiry. Status: `HEALTHY` / `SLOW` / `STALE` / `CRITICAL` / `UNKNOWN`. Supports card-click selection. |
+| **Sui Event Streaming** | Polls `OracleActivated` and `OracleSettled` events via Sui GraphQL every 10 minutes to keep the active oracle list updated. |
 
 ---
 
@@ -126,8 +127,8 @@ Base URL: `REACT_APP_PREDICT_SERVER` (default: `https://predict-server.testnet.m
 | `GET` | `/predicts/:predict_id/oracles` | `useSurfaceData` — initial oracle list |
 | `GET` | `/oracles/:oracle_id/svi?limit=5&order=desc` | `getLiveSurface` — latest SVI params |
 | `GET` | `/oracles/:oracle_id/prices?limit=5&order=desc` | `getLiveSurface` — latest spot/forward |
-| `GET` | `/oracles/:oracle_id/svi` | `getHistoricalSurface` — full SVI history |
-| `GET` | `/oracles/:oracle_id/prices` | `getHistoricalSurface` — full price history |
+| `GET` | `/oracles/:oracle_id/svi` | `getHistoricalSurface` — SVI parameters history |
+| `GET` | `/oracles/:oracle_id/prices` | `getHistoricalSurface` — price history |
 
 ### Sui GraphQL
 
@@ -148,7 +149,7 @@ Events polled every **10 minutes**:
 |---|---|
 | `react`, `react-dom` | UI framework |
 | `react-scripts` | CRA build tooling |
-| `plotly.js` + `react-plotly.js` | 3D surface plots |
+| `plotly.js` + `react-plotly.js` | 3D surface plots & 2D volatility smiles |
 | `recharts` | (available, reserved for future 2D charts) |
 | `axios` | HTTP client for oracle REST API |
 | `@mysten/sui` | Sui GraphQL client for event polling |
