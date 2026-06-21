@@ -29,6 +29,7 @@ export function HistorySurface({ oracles, historyCache }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedValue(timeSliderValue);
+      setManualInput(String(timeSliderValue));
     }, 300);
     return () => clearTimeout(timer);
   }, [timeSliderValue]);
@@ -181,6 +182,7 @@ export function HistorySurface({ oracles, historyCache }) {
       </div>
 
       <div className="manual-time-controls">
+        
         <input
           type="text"
           value={manualInput}
@@ -188,7 +190,7 @@ export function HistorySurface({ oracles, historyCache }) {
           placeholder="e.g. 60, 400 minutes ago"
           className="manual-time-input"
         />
-
+        <label>Minutes Ago</label>
         <button
           className="manual-time-btn"
           onClick={() => {
