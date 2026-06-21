@@ -204,8 +204,8 @@ export async function getLiveSurface(oracles, numPoints = 30) {
   const histories = await Promise.all(
     activeOracles.map(async (oracle) => {
       const [pricesRes, sviRes] = await Promise.all([
-        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices?limit=5&order=desc`),
-        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi?limit=5&order=desc`),
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/prices?limit=5`),
+        axios.get(`${PREDICT_SERVER}/oracles/${oracle.oracle_id}/svi?limit=5`),
       ]);
       return {
         oracle_id: oracle.oracle_id,
