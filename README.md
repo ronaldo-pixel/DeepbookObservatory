@@ -17,16 +17,16 @@ frontend/
 │   │   ├── HistorySurface.jsx      # Renders the 3D historical surface with a timeline slider (up to 7d ago)
 │   │   ├── SurfaceAnalysis.jsx     # Market Volatility Regime and Calendar & Butterfly violation checks (always visible)
 │   │   ├── OracleSmileViewer.jsx   # 2D volatility smile curve (IV vs. log-moneyness) + SVI parameters + spot/forward prices
-│   │   └── OracleHealthPanel.jsx   # Per-oracle SVI feed health (lag, avg interval, expiry); allows selection by card click
+│   │   ├── OracleHealthPanel.jsx   # Per-oracle SVI feed health (lag, avg interval, expiry); allows selection by card click
+│   │   └── TermStructure.jsx       # 2D line chart of ATM implied volatility (k = 0) across expiries, built from healthy oracles
 │   ├── hooks/
 │   │   └── useSurfaceData.js       # Fetches oracle list; polls Sui GraphQL for OracleActivated / OracleSettled events
 │   └── utils/
 │       └── sviMath.js              # SVI math (normalization, IV calc, surface build, arbitrage checks, regime detection)
 └── public/
     └── index.html
-```
 
----
+```
 
 ## Features
 
@@ -102,31 +102,38 @@ npm run build
 
 ## Docker
 
-Run the frontend in a container (served via nginx):
+## Docker
+
+The frontend is built using a multi-stage Docker image and served via nginx.
+
+### Build the image
 
 ```bash
-docker-compose up frontend
+docker build -t deepbook-observatory-frontend .
 ```
 
-Or bring up the full stack:
+### Run the container
 
 ```bash
-docker-compose up
+docker run -d \
+  -p 8080:80 \
+  --name deepbook-observatory-frontend \
+  deepbook-observatory-frontend
 ```
 
-Pass environment variables via a root-level `.env` file (see `.env.example` in the frontend folder).
+The application will be available at:
 
----
-
-## Key API Endpoints consumed by the frontend
+```text
+http://localhost:8080
+```
 
 Base URL: `REACT_APP_PREDICT_SERVER` (default: `https://predict-server.testnet.mystenlabs.com`)
 
 | Method | Path | Used by |
 |---|---|---|
 | `GET` | `/predicts/:predict_id/oracles` | `useSurfaceData` — initial oracle list |
-| `GET` | `/oracles/:oracle_id/svi?limit=5&order=desc` | `getLiveSurface` — latest SVI params |
-| `GET` | `/oracles/:oracle_id/prices?limit=5&order=desc` | `getLiveSurface` — latest spot/forward |
+| `GET` | `/oracles/:oracle_id/svi?limit=5` | `getLiveSurface` — latest SVI params |
+| `GET` | `/oracles/:oracle_id/prices?limit=5` | `getLiveSurface` — latest spot/forward |
 | `GET` | `/oracles/:oracle_id/svi` | `getHistoricalSurface` — SVI parameters history |
 | `GET` | `/oracles/:oracle_id/prices` | `getHistoricalSurface` — price history |
 
