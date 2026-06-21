@@ -4,15 +4,16 @@
   "description": "Frontend for DeepBook Observatory - real-time analytics platform",
   "private": true,
   "dependencies": {
-    "react": "latest",
-    "react-dom": "latest",
-    "react-scripts": "latest",
-    "plotly.js": "latest",
-    "react-plotly.js": "latest",
-    "recharts": "latest",
-    "axios": "latest",
-    "@mysten/sui": "latest"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-scripts": "5.0.1",
+    "plotly.js": "^2.35.2",
+    "react-plotly.js": "^2.6.0",
+    "recharts": "^2.13.0",
+    "axios": "^1.7.7",
+    "@mysten/sui": "^2.19.0"
   },
+  
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
@@ -20,21 +21,11 @@
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
-    "extends": [
-      "react-app"
-    ]
+    "extends": ["react-app"]
   },
   "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
   },
   "proxy": "http://localhost:3001"
 }

@@ -101,17 +101,7 @@ function App() {
 
   if (liveSurface?.analysis) {
     const { regime, calendarViolations, butterflyViolations } = liveSurface.analysis;
-
-    // 1. Volatility Regime Alert → goes to live page, surface-analysis section
-    if (regime?.regime && regime.regime !== 'normal') {
-      activeAlerts.push({
-        type: 'regime',
-        severity: regime.regime === 'extreme' ? 'critical' : 'warning',
-        message: `Volatility Regime is ${regime.regime.toUpperCase()}: ATM IV at ${regime.frontATMIV}% (Slope: ${regime.slope}%)`,
-        targetTab: 'surface',
-        targetId: 'section-surface-analysis',
-      });
-    }
+    
 
     // 2. Calendar Violations Alert → goes to live page, surface-analysis section
     if (calendarViolations?.length > 0) {
@@ -135,6 +125,51 @@ function App() {
       });
     }
 
+        // 4. Oracle Health Alerts → goes to Oracle Dashboard, Oracle Health section
+    const criticalOracles =
+      liveSurface?.oracleHealth?.filter(
+        (o) => o.status === 'CRITICAL'
+      ) || [];
+
+    const staleOracles =
+      liveSurface?.oracleHealth?.filter(
+        (o) => o.status === 'STALE'
+      ) || [];
+
+    if (criticalOracles.length > 0) {
+      activeAlerts.push({
+        type: 'oracle-critical',
+        severity: 'critical',
+        message: `${criticalOracles.length} oracle${
+          criticalOracles.length > 1 ? 's are' : ' is'
+        } in CRITICAL state.`,
+        targetTab: 'oracle',
+        targetId: 'section-oracle-health',
+      });
+    }
+
+    if (staleOracles.length > 0) {
+      activeAlerts.push({
+        type: 'oracle-stale',
+        severity: 'warning',
+        message: `${staleOracles.length} oracle${
+          staleOracles.length > 1 ? 's are' : ' is'
+        } STALE.`,
+        targetTab: 'oracle',
+        targetId: 'section-oracle-health',
+      });
+    }
+
+    // 1. Volatility Regime Alert → goes to live page, surface-analysis section
+    if (regime?.regime && regime.regime !== 'normal') {
+      activeAlerts.push({
+        type: 'regime',
+        severity: regime.regime === 'extreme' ? 'critical' : 'warning',
+        message: `Volatility Regime is ${regime.regime.toUpperCase()}: ATM IV at ${regime.frontATMIV}% (Slope: ${regime.slope}%)`,
+        targetTab: 'surface',
+        targetId: 'section-surface-analysis',
+      });
+    }
     // Future alerts: push { type, severity, message, targetTab, targetId } here.
     // targetId must match an id= attribute on a DOM element in the rendered page.
   }

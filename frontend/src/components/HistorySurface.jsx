@@ -68,7 +68,7 @@ export function HistorySurface({ oracles, historyCache }) {
 
     loadSurface();
     return () => controller.abort();
-  }, [debouncedValue]);
+  }, [oracles,debouncedValue]);
 
   if (loading && !surfaceToDisplay) {
     return (
@@ -185,7 +185,7 @@ export function HistorySurface({ oracles, historyCache }) {
           type="text"
           value={manualInput}
           onChange={(e) => setManualInput(e.target.value)}
-          placeholder="e.g. 60, 400"
+          placeholder="e.g. 60, 400 minutes ago"
           className="manual-time-input"
         />
 

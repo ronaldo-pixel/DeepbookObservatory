@@ -79,7 +79,7 @@ export function useSurfaceData() {
         expiry: Number(expiry),
         settled_at: null,
       };
-      console.log('New oracle activated:', newOracle);
+      
 
       let lo = 0, hi = prev.length;
       while (lo < hi) {
@@ -101,7 +101,7 @@ export function useSurfaceData() {
       axios.get(`${PREDICT_SERVER}/oracles/${oracle_id}/prices`),
       axios.get(`${PREDICT_SERVER}/oracles/${oracle_id}/svi`),
     ]);
-    console.log(`Oracle ${oracle_id} settled.`);
+    
 
     const prices = (pricesRes.data || [])
       .map((p) => ({ spot: p.spot, forward: p.forward, onchain_timestamp: p.onchain_timestamp }))
@@ -136,7 +136,7 @@ export function useSurfaceData() {
 
   useEffect(() => {
     const pollEvents = async () => {
-      console.log('polling...');
+      
 
       const [activatedResult, settledResult] = await Promise.all([
         graphqlClient.query({
@@ -194,8 +194,7 @@ export function useSurfaceData() {
         settledCursorRef.current = settledCursor;
       }
 
-      console.log('activated cursor:', activatedCursorRef.current);
-      console.log('settled cursor:', settledCursorRef.current);
+     
     };
 
     const init = async () => {
@@ -233,8 +232,7 @@ export function useSurfaceData() {
       settledCursorRef.current =
         settledInit.data?.events?.pageInfo?.endCursor ?? null;
 
-      console.log('initialized activated cursor:', activatedCursorRef.current);
-      console.log('initialized settled cursor:', settledCursorRef.current);
+      
     };
 
     let interval;
